@@ -3,41 +3,76 @@
 #include <WiFiClient.h>
 #include <ESP8266WebServer.h>
 #include <ESP8266mDNS.h>
+#include <ArduinoJson.h>
  
-const char* ssid = "_";
-const char* password = "Ponduspondus88";
- 
+const char* ssid = "MagnusiPhone";
+const char* password = "Ponduspondus8";
+
+int pos1Destination = 100;
+int pos2Destination = 0;
+
 ESP8266WebServer server(80);
  
 // Serving Hello world
-void getHelloWord() {
-    server.send(200, "text/json", "{\"name\": \"Hello world\"}");
+void setPosition() {
+    String postBody = server.arg("plain");
+    Serial.println(postBody);
+ 
+    DynamicJsonDocument doc(512);
+    DeserializationError error = deserializeJson(doc, postBody);
+    if (error) {
+        // if the file didn't open, print an error:
+        Serial.print(F("Error parsing JSON "));
+        Serial.println(error.c_str());
+ 
+        String msg = error.c_str();
+ 
+        server.send(400, F("text/html"),
+                "Error in parsin json body! <br>" + msg);
+ 
+    } else {
+        JsonObject postObj = doc.as<JsonObject>();
+ 
+        Serial.print(F("HTTP Method: "));
+        Serial.println(server.method());
+ 
+        if (server.method() == HTTP_POST) {
+            if (postObj.containsKey("pos1Destination") && postObj.containsKey("pos2Destination")) {
+                Serial.println(F("done."));
+ 
+                // Here store data or doing operation
+                pos1Destination = postObj["pos1Destination"];
+                pos2Destination = postObj["pos2Destination"];
+ 
+                // Create the response
+                // To get the status of the result you can get the http status so
+                // this part can be unusefully
+                DynamicJsonDocument doc(512);
+                doc["status"] = "OK";
+ 
+                Serial.print(F("Stream..."));
+                String buf;
+                serializeJson(doc, buf);
+ 
+                server.send(201, F("application/json"), buf);
+                Serial.print(F("done."));
+ 
+            }else {
+                DynamicJsonDocument doc(512);
+                doc["status"] = "KO";
+                doc["message"] = F("No data found, or incorrect!");
+ 
+                Serial.print(F("Stream..."));
+                String buf;
+                serializeJson(doc, buf);
+ 
+                server.send(400, F("application/json"), buf);
+                Serial.print(F("done."));
+            }
+        }
+    }
 }
-// Serving Hello world
-void getSettings() {
-    String response = "{";
  
-    response+= "\"ip\": \""+WiFi.localIP().toString()+"\"";
-    response+= ",\"gw\": \""+WiFi.gatewayIP().toString()+"\"";
-    response+= ",\"nm\": \""+WiFi.subnetMask().toString()+"\"";
- 
-    if (server.arg("signalStrength")== "true"){
-        response+= ",\"signalStrengh\": \""+String(WiFi.RSSI())+"\"";
-    }
- 
-    if (server.arg("chipInfo")== "true"){
-        response+= ",\"chipId\": \""+String(ESP.getChipId())+"\"";
-        response+= ",\"flashChipId\": \""+String(ESP.getFlashChipId())+"\"";
-        response+= ",\"flashChipSize\": \""+String(ESP.getFlashChipSize())+"\"";
-        response+= ",\"flashChipRealSize\": \""+String(ESP.getFlashChipRealSize())+"\"";
-    }
-    if (server.arg("freeHeap")== "true"){
-        response+= ",\"freeHeap\": \""+String(ESP.getFreeHeap())+"\"";
-    }
-    response+="}";
- 
-    server.send(200, "text/json", response);
-}
  
 // Define routing
 void restServerRouting() {
@@ -45,8 +80,8 @@ void restServerRouting() {
         server.send(200, F("text/html"),
             F("Welcome to the REST Web Server"));
     });
-    server.on(F("/helloWorld"), HTTP_GET, getHelloWord);
-    server.on(F("/settings"), HTTP_GET, getSettings);
+    // handle post request
+    server.on(F("/setPosition"), HTTP_POST, setPosition);
 }
  
 // Manage not found URL
@@ -99,4 +134,5 @@ void setup(void) {
  
 void loop(void) {
   server.handleClient();
+  Serial.println(String(pos1Destination) + "," + String(pos2Destination));
 }
